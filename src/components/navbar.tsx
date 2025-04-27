@@ -16,9 +16,6 @@ export default function Navbar() {
           <Link href="/services" className="hover:underline">
             Services
           </Link>
-          <Link href="/pricing" className="hover:underline">
-            Pricing
-          </Link>
           <Link href="/booking" className="hover:underline">
             Book Now
           </Link>

@@ -165,7 +165,7 @@ export default function ServiceTiersSection() {
               </ul>
               <div className="mt-auto">
                 <Link 
-                  href="/contact" 
+                  href="/booking?contact=true" 
                   className="w-full block text-center bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md transition"
                 >
                   Request Assessment

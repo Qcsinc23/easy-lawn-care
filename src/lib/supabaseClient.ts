@@ -1,34 +1,33 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+/**
+ * @fileoverview Initializes Supabase clients for both client-side and server-side use.
+ * It sets up a public client safe for browser environments and an admin client
+ * intended only for server-side operations requiring elevated privileges.
+ * Environment variables are used for configuration.
+ */
 
 // Initialize client with public keys for client-side usage
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMessage = `Supabase configuration error: NEXT_PUBLIC_SUPABASE_URL (${supabaseUrl ? 'found' : 'missing'}) or NEXT_PUBLIC_SUPABASE_ANON_KEY (${supabaseAnonKey ? 'found' : 'missing'}). Check your .env.local file or deployment environment variables.`;
   if (typeof window !== 'undefined') {
-    console.error('Supabase URL or Anonymous Key is missing. Check your environment variables.');
+    // Log error specifically for client-side issues
+    console.error(errorMessage);
   }
-  throw new Error('Supabase URL and Anonymous Key are required. Check your environment variables.');
+  // Throw error regardless of environment to prevent client/server initialization
+  throw new Error(errorMessage);
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/**
+ * Supabase client instance for client-side operations.
+ * Uses the public URL and anonymous key. Safe to use in browser environments.
+ * Requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.
+ * @type {SupabaseClient}
+ */
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
 
-// For server-side operations that need higher privileges (admin routes, API routes)
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Create server-side admin client
-// This client should only be used in server components or API routes
-export const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceRoleKey || supabaseAnonKey, // Fallback to anon key if service role key is missing
-  {
-    auth: {
-      persistSession: false,
-    }
-  }
-);
-
-// Log a warning if supabaseAdmin is used on the client side
-if (typeof window !== 'undefined') {
-  console.warn('Warning: supabaseAdmin is available on the client side. It should only be used in server components.');
-}
+// Admin client logic has been moved to src/lib/supabaseAdminClient.ts
+// This file now only contains the client-safe Supabase instance.

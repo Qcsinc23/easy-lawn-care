@@ -29,6 +29,7 @@ interface BookingDetails {
 export default function BookingSuccessPage() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
+  const requestType = searchParams.get('type'); // Add type param check
   const { user, isLoaded } = useUser();
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +37,13 @@ export default function BookingSuccessPage() {
 
   useEffect(() => {
     async function fetchBookingDetails() {
+      // If it's an assessment request, we don't need to fetch booking details
+      if (requestType === 'assessment') {
+        setLoading(false);
+        return;
+      }
+      
+      // For normal bookings, proceed with fetching details
       if (!sessionId || !isLoaded || !user) return;
 
       try {
@@ -130,7 +138,54 @@ export default function BookingSuccessPage() {
     );
   }
 
-  if (!booking) {
+  // Display custom success message for assessment requests
+  if (requestType === 'assessment') {
+    return (
+      <div className="flex min-h-screen flex-col items-center p-8 md:p-24">
+        <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md border border-gray-200">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-blue-700">Assessment Request Submitted!</h1>
+            <p className="text-gray-600 mt-1">We've received your request for a custom lawn care assessment</p>
+          </div>
+
+          <div className="bg-blue-50 p-4 rounded-lg mb-6">
+            <h2 className="text-lg font-semibold text-blue-800 mb-2">What's Next?</h2>
+            <p className="text-blue-700 mb-2">
+              One of our lawn care specialists will review your assessment request within 1-2 business days.
+            </p>
+            <p className="text-blue-700 mb-2">
+              We'll contact you to schedule an in-person visit to evaluate your lawn and provide a custom quote.
+            </p>
+            <p className="text-blue-700">
+              You'll receive a confirmation email with these details shortly.
+            </p>
+          </div>
+
+          <div className="flex flex-col space-y-3 mt-6">
+            <Link 
+              href="/dashboard" 
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-center"
+            >
+              View Your Dashboard
+            </Link>
+            <Link 
+              href="/" 
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-center"
+            >
+              Return to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!booking && !requestType) {
     return (
       <div className="flex min-h-screen flex-col items-center p-8 md:p-24">
         <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md border border-gray-200">
@@ -150,6 +205,12 @@ export default function BookingSuccessPage() {
         </div>
       </div>
     );
+  }
+
+  // At this point we know booking is not null
+  // TypeScript needs this guard to prevent "possibly null" errors
+  if (!booking) {
+    return null; // This should never happen but keeps TypeScript happy
   }
 
   // Format date for display

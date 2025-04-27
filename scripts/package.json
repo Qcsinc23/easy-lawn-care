@@ -1,0 +1,13 @@
+{
+  "name": "easy-lawn-care-scripts",
+  "version": "1.0.0",
+  "description": "Utility scripts for Easy Lawn Care application",
+  "main": "apply-migration-direct.js",
+  "scripts": {
+    "apply-migration": "node apply-migration-direct.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "node-fetch": "^2.6.7"
+  }
+}
