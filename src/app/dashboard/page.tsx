@@ -4,11 +4,13 @@ import { useUser } from '@clerk/nextjs';
 import { redirect, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useState, Suspense } from 'react';
+import { ApiError, ServerConfigurationError, DatabaseConnectionError } from '@/components/ui/api-error';
 
 /**
  * @fileoverview User dashboard page component.
  * Displays the logged-in user's bookings fetched from API endpoints.
  * Allows users to view booking details, cancel, or reschedule upcoming services.
+ * Includes enhanced error handling for API connection issues.
  */
 
 /**
@@ -45,7 +47,8 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const shouldRefresh = searchParams.get('refresh') === 'true';
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | string | null>(null);
+  const [errorType, setErrorType] = useState<'server' | 'database' | 'general' | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -75,20 +78,35 @@ function DashboardContent() {
         const response = await fetch('/api/bookings');
         
         if (!response.ok) {
-          throw new Error('Failed to fetch bookings');
+          const errorData = await response.json().catch(() => ({}));
+          
+          // Determine error type based on response status and message
+          if (response.status === 500) {
+            if (errorData.error === 'Server configuration error') {
+              setErrorType('server');
+              throw new Error(errorData.message || 'Server configuration error');
+            } else if (errorData.error === 'Database connection error') {
+              setErrorType('database');
+              throw new Error(errorData.message || 'Database connection error');
+            }
+          }
+          
+          // Default error handling
+          setErrorType('general');
+          throw new Error(errorData.message || 'Failed to fetch bookings');
         }
         
         const data = await response.json();
         setBookings(data.bookings || []);
         setError(null);
+        setErrorType(null);
       } catch (err) {
         console.error('Error fetching bookings:', err);
-        setError('Error loading bookings. Please try again later.');
+        setError(err instanceof Error ? err : 'Error loading bookings. Please try again later.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchBookings();
     
     // Set up automatic refresh every 5 seconds
@@ -112,7 +130,6 @@ function DashboardContent() {
           status: 'Cancelled'
         }),
       });
-
       if (!response.ok) {
         throw new Error('Failed to cancel booking');
       }
@@ -122,6 +139,7 @@ function DashboardContent() {
     } catch (err) {
       console.error('Error cancelling booking:', err);
       setError('Failed to cancel booking. Please try again.');
+      setErrorType('general');
     }
   };
   
@@ -168,8 +186,22 @@ function DashboardContent() {
         )}
 
         {/* Display error message if fetching failed */}
-        {error && (
-          <p className="text-red-600 mb-4">{error}</p>
+        {error && errorType === 'server' && (
+          <ServerConfigurationError retry={handleManualRefresh} className="mb-8" />
+        )}
+        
+        {error && errorType === 'database' && (
+          <DatabaseConnectionError retry={handleManualRefresh} className="mb-8" />
+        )}
+        
+        {error && errorType === 'general' && (
+          <ApiError 
+            title="Error Loading Bookings" 
+            message="We couldn't retrieve your bookings at this time. Please try again later."
+            error={error}
+            retry={handleManualRefresh}
+            className="mb-8"
+          />
         )}
 
         {/* Display message if there are no bookings */}

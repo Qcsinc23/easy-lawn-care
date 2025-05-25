@@ -2,18 +2,53 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { currentUser } from '@clerk/nextjs/server';
 import { syncUserProfileWithPrisma } from '@/lib/user-profile';
+import { PrismaClientInitializationError } from '@prisma/client/runtime/library';
 
 /**
  * @fileoverview API routes for address management
  * Handles fetching, creating, updating, and deleting user addresses
- * Replaces direct Supabase client calls with secure server-side operations
+ * Includes enhanced error handling for database connection issues
  */
+
+/**
+ * Check if required environment variables are configured
+ * @returns Object containing environment status and error message if applicable
+ */
+function checkEnvironmentConfig() {
+  const missingVars = [];
+  
+  if (!process.env.DATABASE_URL) missingVars.push('DATABASE_URL');
+  if (!process.env.CLERK_SECRET_KEY) missingVars.push('CLERK_SECRET_KEY');
+  
+  const isConfigValid = missingVars.length === 0;
+  
+  return {
+    isValid: isConfigValid,
+    message: isConfigValid ? 'Environment configured properly' : 
+      `Missing required environment variables: ${missingVars.join(', ')}. Please configure these in your Vercel deployment settings.`
+  };
+}
 
 /**
  * GET /api/addresses
  * Fetch all addresses for the authenticated user
+ * Includes enhanced error handling for database connection issues
  */
 export async function GET() {
+  // Check environment configuration first
+  const envConfig = checkEnvironmentConfig();
+  if (!envConfig.isValid) {
+    console.error(`Environment configuration error: ${envConfig.message}`);
+    return NextResponse.json(
+      { 
+        error: 'Server configuration error', 
+        message: 'The server is missing required configuration. Please contact the administrator.',
+        details: process.env.NODE_ENV === 'development' ? envConfig.message : undefined
+      },
+      { status: 500 }
+    );
+  }
+  
   try {
     // Verify user is authenticated
     const user = await currentUser();
@@ -25,25 +60,47 @@ export async function GET() {
       );
     }
 
-    // Fetch user's addresses
-    const addresses = await prisma.address.findMany({
-      where: {
-        clerkUserId: user.id
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    try {
+      // Fetch user's addresses
+      const addresses = await prisma.address.findMany({
+        where: {
+          clerkUserId: user.id
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
 
-    return NextResponse.json({
-      success: true,
-      addresses
-    });
+      return NextResponse.json({
+        success: true,
+        addresses
+      });
+    } catch (dbError) {
+      // Handle database-specific errors
+      console.error('Database operation error:', dbError);
+      
+      if (dbError instanceof PrismaClientInitializationError) {
+        return NextResponse.json(
+          { 
+            error: 'Database connection error', 
+            message: 'Unable to connect to the database. The server may be misconfigured.',
+            details: process.env.NODE_ENV === 'development' ? dbError.message : undefined
+          },
+          { status: 500 }
+        );
+      }
+      
+      throw dbError; // Re-throw for general error handling
+    }
     
   } catch (error: unknown) {
     console.error('Error fetching addresses:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch addresses', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to fetch addresses', 
+        message: 'An error occurred while retrieving your addresses. Please try again later.',
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
       { status: 500 }
     );
   }
