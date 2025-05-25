@@ -15,7 +15,6 @@ import { NextResponse, NextRequest } from 'next/server';
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)', // Protects the user dashboard and all its sub-routes.
   '/booking(.*)',   // Protects the booking flow pages.
-  '/services(.*)',  // Protects service-related pages (if they require login).
   '/pricing(.*)',   // Protects pricing pages (if they require login, e.g., custom plans).
 ]);
 
@@ -121,6 +120,5 @@ export const config = {
     '/api/stripe/create-checkout',
     '/api/bookings',
     '/api/addresses',
-    '/api/services'
   ],
 };
