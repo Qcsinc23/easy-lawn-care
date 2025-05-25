@@ -3,7 +3,7 @@
 import { useUser } from '@clerk/nextjs';
 import { redirect, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 
 /**
  * @fileoverview User dashboard page component.
@@ -38,13 +38,9 @@ interface Booking {
 }
 
 /**
- * Renders the user dashboard page.
- * Fetches the current user via Clerk and their associated bookings from API endpoints
- * for secure data access. Displays bookings in a list format
- * with options to cancel or reschedule based on the booking status.
- * Redirects unauthenticated users to the sign-in page.
+ * Dashboard content component that handles search params logic
  */
-export default function Dashboard() {
+function DashboardContent() {
   const { user, isLoaded } = useUser();
   const searchParams = useSearchParams();
   const shouldRefresh = searchParams.get('refresh') === 'true';
@@ -253,5 +249,20 @@ export default function Dashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Main Dashboard component wrapped with Suspense
+ */
+export default function Dashboard() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center p-8">
+        <div className="text-lg">Loading dashboard...</div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }

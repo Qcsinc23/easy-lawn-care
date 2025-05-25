@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -25,7 +25,7 @@ interface BookingDetails {
   stripe_charge_id: string;
 }
 
-export default function BookingSuccessPage() {
+function BookingSuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const requestType = searchParams.get('type'); // Add type param check
@@ -382,5 +382,17 @@ export default function BookingSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BookingSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col items-center justify-center p-8">
+        <div className="text-lg">Loading booking details...</div>
+      </div>
+    }>
+      <BookingSuccessContent />
+    </Suspense>
   );
 }

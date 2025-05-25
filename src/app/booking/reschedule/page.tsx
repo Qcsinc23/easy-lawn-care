@@ -18,6 +18,7 @@ interface Booking {
   total_price: number;
 }
 
+// Separate the content component from the page component
 function ReschedulePageContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('id');
@@ -189,16 +190,6 @@ function ReschedulePageContent() {
       </div>
     );
   }
-  
-  export default function ReschedulePage() {
-    return (
-      <Suspense fallback={<div className="flex min-h-screen flex-col items-center justify-center p-8">
-        <div className="text-lg">Loading...</div>
-      </div>}>
-        <ReschedulePageContent />
-      </Suspense>
-    );
-  }
 
   // Format date for display
   const currentDate = new Date(booking.booking_date).toLocaleDateString();
@@ -275,5 +266,16 @@ function ReschedulePageContent() {
         </form>
       </div>
     </div>
+  );
+}
+
+// Main page component that uses the content component
+export default function ReschedulePage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen flex-col items-center justify-center p-8">
+      <div className="text-lg">Loading...</div>
+    </div>}>
+      <ReschedulePageContent />
+    </Suspense>
   );
 }
