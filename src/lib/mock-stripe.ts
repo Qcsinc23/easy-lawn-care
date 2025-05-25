@@ -9,7 +9,26 @@ const generateMockSessionId = () => `mock_sess_${Math.random().toString(36).subs
 
 // Mock Stripe checkout sessions implementation
 const mockCheckoutSessions = {
-  create: async (options: any) => {
+  create: async (options: {
+    payment_method_types: string[];
+    line_items: Array<{
+      price_data: {
+        currency: string;
+        product_data: {
+          name: string;
+          description?: string;
+        };
+        unit_amount: number;
+      };
+      quantity: number;
+    }>;
+    customer_email?: string;
+    mode: string;
+    success_url: string;
+    cancel_url: string;
+    metadata: Record<string, string>;
+    client_reference_id?: string;
+  }) => {
     console.log('[MOCK STRIPE] Creating checkout session with options:', options);
     
     // Simulate a network delay
@@ -21,7 +40,7 @@ const mockCheckoutSessions = {
       url: options.success_url.replace('{CHECKOUT_SESSION_ID}', generateMockSessionId()),
       payment_status: 'unpaid',
       status: 'open',
-      client_reference_id: options.client_reference_id,
+      client_reference_id: options.client_reference_id || null,
       metadata: options.metadata,
       // Add other fields as needed by your application
     };

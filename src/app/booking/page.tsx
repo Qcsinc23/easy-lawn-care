@@ -261,7 +261,7 @@ export default function BookingPage() {
                   </Select>
                   {addresses.length === 0 && (
                     <FormDescription>
-                      No addresses found. Use the "Add New Address" button above to add your service location.
+                      No addresses found. Use the &quot;Add New Address&quot; button above to add your service location.
                     </FormDescription>
                   )}
                   <FormMessage />

@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { CheckIcon } from '@heroicons/react/24/solid';
-import Image from 'next/image';
 
 export default function ServicesPage() {
   return (
@@ -239,7 +238,7 @@ export default function ServicesPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-600 mb-2">Precision</h4>
-                  <p className="text-gray-600">Sharp, defined edges that enhance your property's appearance</p>
+                  <p className="text-gray-600">Sharp, defined edges that enhance your property&apos;s appearance</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-600 mb-2">Maintenance</h4>
@@ -252,13 +251,13 @@ export default function ServicesPage() {
               <h3 className="text-2xl font-bold text-green-700 mb-4">Advanced Lawn Care</h3>
               <p className="text-gray-600 mb-6">
                 Our premium services include comprehensive lawn health management, from fertilization to 
-                detailed documentation with before and after photos. We monitor your lawn's conditions and 
+                detailed documentation with before and after photos. We monitor your lawn&apos;s conditions and 
                 make recommendations to keep it looking its best year-round.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-600 mb-2">Documentation</h4>
-                  <p className="text-gray-600">Track your lawn's progress with detailed visual records</p>
+                  <p className="text-gray-600">Track your lawn&apos;s progress with detailed visual records</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-600 mb-2">Health Monitoring</h4>
@@ -281,7 +280,7 @@ export default function ServicesPage() {
                 <h3 className="text-xl font-bold text-green-700 mb-2">How often should I have my lawn serviced?</h3>
                 <p className="text-gray-600">
                   During the growing season, we recommend service every 1-2 weeks depending on your grass type and local climate. 
-                  We can create a customized schedule based on your lawn's specific needs.
+                  We can create a customized schedule based on your lawn&apos;s specific needs.
                 </p>
               </div>
               
@@ -289,15 +288,15 @@ export default function ServicesPage() {
                 <h3 className="text-xl font-bold text-green-700 mb-2">What happens if it rains on my service day?</h3>
                 <p className="text-gray-600">
                   We monitor weather conditions and will reschedule your service if heavy rain is expected. If light rain occurs, 
-                  we may still perform the service if it won't damage your lawn or compromise our quality standards.
+                  we may still perform the service if it won&apos;t damage your lawn or compromise our quality standards.
                 </p>
               </div>
               
               <div className="bg-gray-50 rounded-lg p-6">
                 <h3 className="text-xl font-bold text-green-700 mb-2">Do I need to be home during the service?</h3>
                 <p className="text-gray-600">
-                  No, you don't need to be home. Our crews are fully trained and equipped to provide service whether you're home or not. 
-                  We'll notify you before arrival and send confirmation when the job is complete.
+                  No, you don&apos;t need to be home. Our crews are fully trained and equipped to provide service whether you&apos;re home or not. 
+                  We&apos;ll notify you before arrival and send confirmation when the job is complete.
                 </p>
               </div>
               

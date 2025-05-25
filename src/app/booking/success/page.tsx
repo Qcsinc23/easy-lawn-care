@@ -137,7 +137,7 @@ export default function BookingSuccessPage() {
     if (isLoaded) {
       fetchBookingDetails();
     }
-  }, [sessionId, isLoaded, user]);
+  }, [sessionId, isLoaded, user, requestType, simulateMode]);
 
   // In simulation mode, we don't need to wait for authentication
   if (!simulateMode && (!isLoaded || (isLoaded && !user))) {
@@ -214,19 +214,19 @@ export default function BookingSuccessPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-blue-700">Assessment Request Submitted!</h1>
-            <p className="text-gray-600 mt-1">We've received your request for a custom lawn care assessment</p>
+            <p className="text-gray-600 mt-1">We&apos;ve received your request for a custom lawn care assessment</p>
           </div>
 
           <div className="bg-blue-50 p-4 rounded-lg mb-6">
-            <h2 className="text-lg font-semibold text-blue-800 mb-2">What's Next?</h2>
+            <h2 className="text-lg font-semibold text-blue-800 mb-2">What&apos;s Next?</h2>
             <p className="text-blue-700 mb-2">
               One of our lawn care specialists will review your assessment request within 1-2 business days.
             </p>
             <p className="text-blue-700 mb-2">
-              We'll contact you to schedule an in-person visit to evaluate your lawn and provide a custom quote.
+              We&apos;ll contact you to schedule an in-person visit to evaluate your lawn and provide a custom quote.
             </p>
             <p className="text-blue-700">
-              You'll receive a confirmation email with these details shortly.
+              You&apos;ll receive a confirmation email with these details shortly.
             </p>
           </div>
 
@@ -268,7 +268,7 @@ export default function BookingSuccessPage() {
           <div className="bg-blue-50 p-4 rounded-lg mb-6">
             <h2 className="text-lg font-semibold text-blue-800 mb-2">Booking Processing</h2>
             <p className="text-blue-700 mb-2">
-              Your payment was successful, but we're still processing your booking details.
+              Your payment was successful, but we&apos;re still processing your booking details.
             </p>
             <p className="text-blue-700">
               Please check your dashboard in a few moments to see your confirmed booking.
@@ -357,12 +357,12 @@ export default function BookingSuccessPage() {
         </div>
 
         <div className="bg-blue-50 p-4 rounded-lg mb-6">
-          <h2 className="text-lg font-semibold text-blue-800 mb-2">What's Next?</h2>
+          <h2 className="text-lg font-semibold text-blue-800 mb-2">What&apos;s Next?</h2>
           <p className="text-blue-700 mb-2">
             Our team will arrive at your location on {formattedDate} during the {booking.booking_time_slot} time slot.
           </p>
           <p className="text-blue-700">
-            You'll receive a confirmation email with these details shortly.
+            You&apos;ll receive a confirmation email with these details shortly.
           </p>
         </div>
 

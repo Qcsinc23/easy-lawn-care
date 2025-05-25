@@ -13,7 +13,7 @@ import { syncUserProfileWithPrisma } from '@/lib/user-profile';
  * GET /api/bookings
  * Fetch all bookings for the authenticated user
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verify user is authenticated
     const user = await currentUser();
@@ -47,10 +47,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ bookings });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching bookings:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch bookings', details: error?.message || 'Unknown error' },
+      { error: 'Failed to fetch bookings', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -115,10 +115,10 @@ export async function PATCH(request: NextRequest) {
       message: 'Booking status updated successfully'
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating booking:', error);
     return NextResponse.json(
-      { error: 'Failed to update booking', details: error?.message || 'Unknown error' },
+      { error: 'Failed to update booking', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

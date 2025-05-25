@@ -13,7 +13,7 @@ import { syncUserProfileWithPrisma } from '@/lib/user-profile';
  * GET /api/addresses
  * Fetch all addresses for the authenticated user
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verify user is authenticated
     const user = await currentUser();
@@ -40,10 +40,10 @@ export async function GET(request: NextRequest) {
       addresses
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching addresses:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch addresses', details: error?.message || 'Unknown error' },
+      { error: 'Failed to fetch addresses', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -105,10 +105,10 @@ export async function POST(request: NextRequest) {
       address
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating address:', error);
     return NextResponse.json(
-      { error: 'Failed to create address', details: error?.message || 'Unknown error' },
+      { error: 'Failed to create address', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -150,7 +150,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Build update data object with only provided fields
-    const updateData: any = {};
+    const updateData: Record<string, string | undefined> = {};
     if (streetAddress !== undefined) updateData.streetAddress = streetAddress;
     if (area !== undefined) updateData.area = area;
     if (city !== undefined) updateData.city = city;
@@ -179,10 +179,10 @@ export async function PATCH(request: NextRequest) {
       message: 'Address updated successfully'
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating address:', error);
     return NextResponse.json(
-      { error: 'Failed to update address', details: error?.message || 'Unknown error' },
+      { error: 'Failed to update address', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -235,10 +235,10 @@ export async function DELETE(request: NextRequest) {
       message: 'Address deleted successfully'
     });
     
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting address:', error);
     return NextResponse.json(
-      { error: 'Failed to delete address', details: error?.message || 'Unknown error' },
+      { error: 'Failed to delete address', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

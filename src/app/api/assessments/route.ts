@@ -59,12 +59,12 @@ export async function POST(request: NextRequest) {
       assessment_id: customAssessment.id
     });
     
-  } catch (error: any) { // Added : any for better logging
+  } catch (error: unknown) {
     // Improved error logging: Log the full error object
     console.error('Unexpected error in assessment submission:', JSON.stringify(error, null, 2));
     return NextResponse.json(
       // Ensure details field always has content
-      { error: 'Internal server error', details: error?.message || JSON.stringify(error) || 'Unknown server error' }, 
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown server error' },
       { status: 500 }
     );
   }

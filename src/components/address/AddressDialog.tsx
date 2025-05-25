@@ -38,7 +38,15 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 interface AddressDialogProps {
-  onAddressAdded: (address: any) => void;
+  onAddressAdded: (address: {
+    id: string;
+    streetAddress: string;
+    area: string;
+    city: string;
+    region: string;
+    postalCode?: string;
+    country: string;
+  }) => void;
 }
 
 export function AddressDialog({ onAddressAdded }: AddressDialogProps) {
@@ -95,10 +103,10 @@ export function AddressDialog({ onAddressAdded }: AddressDialogProps) {
         form.reset();
         setOpen(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error in address submission:", err);
-      form.setError("root", { 
-        message: err.message || "An unexpected error occurred. Please try again." 
+      form.setError("root", {
+        message: err instanceof Error ? err.message : "An unexpected error occurred. Please try again."
       });
     } finally {
       setIsSubmitting(false);

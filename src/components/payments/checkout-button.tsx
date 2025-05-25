@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 // Removed unused useRouter import
-import { getStripe, dollarsToCents, meetsStripeMinimum } from '@/lib/stripe';
+import { getStripe, meetsStripeMinimum } from '@/lib/stripe';
 import { Button } from '@/components/ui/button';
 
 /**

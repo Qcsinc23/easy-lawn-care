@@ -224,9 +224,9 @@ export default function AddressesPage() {
         country: 'Guyana',
       });
       setShowAddForm(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving address:', err);
-      setAddError(err.message || 'An unexpected error occurred');
+      setAddError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setAddingAddress(false);
     }

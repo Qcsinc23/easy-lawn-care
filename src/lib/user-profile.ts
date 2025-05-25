@@ -70,7 +70,7 @@ export async function syncUserProfileWithPrisma(userId?: string): Promise<string
       console.log(`No existing profile found for user ${user.id}. Creating new profile...`);
       
       // If we only have the userId (without full user object details), just create with minimal data
-      const profileData: any = {
+      const profileData: { clerkUserId: string } = {
         clerkUserId: user.id, // Link to Clerk user
       };
       

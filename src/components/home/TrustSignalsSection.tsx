@@ -87,7 +87,7 @@ export default function TrustSignalsSection() {
               </div>
             </div>
             <p className="text-gray-600 italic">
-              "Easy Lawn Care has transformed my yard! Their service is reliable, professional, and the online booking makes it so convenient. I'm a customer for life."
+              &quot;Easy Lawn Care has transformed my yard! Their service is reliable, professional, and the online booking makes it so convenient. I&apos;m a customer for life.&quot;
             </p>
           </div>
           
@@ -109,7 +109,7 @@ export default function TrustSignalsSection() {
               </div>
             </div>
             <p className="text-gray-600 italic">
-              "I've tried several lawn care services, but Easy Lawn Care stands out. Their premium service with before and after photos gives me peace of mind, and the results are outstanding!"
+              &quot;I&apos;ve tried several lawn care services, but Easy Lawn Care stands out. Their premium service with before and after photos gives me peace of mind, and the results are outstanding!&quot;
             </p>
           </div>
         </div>

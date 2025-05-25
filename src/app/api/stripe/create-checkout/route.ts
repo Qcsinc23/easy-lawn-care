@@ -15,7 +15,7 @@ import mockStripe from '@/lib/mock-stripe';
  */
 
 // Initialize Stripe client
-let stripeClient: any;
+let stripeClient: Stripe | typeof mockStripe | null = null;
 
 // Function to initialize Stripe client - separated for better error handling
 const initializeStripe = () => {
@@ -163,7 +163,7 @@ export async function POST(req: Request) {
       // 4. Return the session ID
       console.log(`Stripe Checkout session created for user ${user.id}: ${session.id}`);
       return NextResponse.json({ sessionId: session.id });
-    } catch (stripeError: any) {
+    } catch (stripeError: unknown) {
       // Handle Stripe-specific errors with more detailed logging
       console.error('Stripe error creating checkout session:', stripeError);
       
@@ -171,26 +171,29 @@ export async function POST(req: Request) {
       let statusCode = 500;
       
       // Map common Stripe errors to user-friendly messages
-      if (stripeError.type === 'StripeCardError') {
+      if (stripeError && typeof stripeError === 'object' && 'type' in stripeError) {
+        const stripeErr = stripeError as { type: string; message?: string };
+        if (stripeErr.type === 'StripeCardError') {
         errorMessage = 'Your card was declined. Please try a different payment method.';
         statusCode = 400;
-      } else if (stripeError.type === 'StripeInvalidRequestError') {
+        } else if (stripeErr.type === 'StripeInvalidRequestError') {
         errorMessage = 'Invalid payment request. Please check your information and try again.';
         statusCode = 400;
-      } else if (stripeError.type === 'StripeAuthenticationError') {
+        } else if (stripeErr.type === 'StripeAuthenticationError') {
         // Don't expose API key issues to the client
-        console.error('Stripe API key authentication error:', stripeError.message);
+        console.error('Stripe API key authentication error:', stripeErr.message);
         errorMessage = 'Payment system configuration error. Please contact support.';
         statusCode = 500;
-      } else if (stripeError.type === 'StripeAPIError') {
+        } else if (stripeErr.type === 'StripeAPIError') {
         errorMessage = 'Stripe API error. Please try again later.';
         statusCode = 503;
-      } else if (stripeError.type === 'StripeConnectionError') {
+        } else if (stripeErr.type === 'StripeConnectionError') {
         errorMessage = 'Could not connect to payment processor. Please try again later.';
         statusCode = 503;
-      } else if (stripeError.type === 'StripeRateLimitError') {
+        } else if (stripeErr.type === 'StripeRateLimitError') {
         errorMessage = 'Too many payment requests. Please try again in a few minutes.';
         statusCode = 429;
+        }
       }
       
       return NextResponse.json({ error: errorMessage }, { status: statusCode });

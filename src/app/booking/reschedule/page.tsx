@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import Link from 'next/link';
@@ -18,7 +18,7 @@ interface Booking {
   total_price: number;
 }
 
-export default function ReschedulePage() {
+function ReschedulePageContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('id');
   const router = useRouter();
@@ -177,7 +177,7 @@ export default function ReschedulePage() {
         <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-md border border-gray-200">
           <h1 className="text-2xl font-bold text-yellow-600 mb-4">Booking Not Found</h1>
           <p className="text-gray-700 mb-6">
-            We couldn't find the booking you're trying to reschedule.
+            We couldn&apos;t find the booking you&apos;re trying to reschedule.
           </p>
           <Link 
             href="/dashboard" 
@@ -187,6 +187,16 @@ export default function ReschedulePage() {
           </Link>
         </div>
       </div>
+    );
+  }
+  
+  export default function ReschedulePage() {
+    return (
+      <Suspense fallback={<div className="flex min-h-screen flex-col items-center justify-center p-8">
+        <div className="text-lg">Loading...</div>
+      </div>}>
+        <ReschedulePageContent />
+      </Suspense>
     );
   }
 
