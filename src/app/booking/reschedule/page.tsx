@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 
 interface Booking {
@@ -40,46 +39,23 @@ export default function ReschedulePage() {
       if (!bookingId || !isLoaded || !user) return;
 
       try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .select(`
-            id,
-            service_id, 
-            address_id,
-            booking_date, 
-            booking_time_slot, 
-            status, 
-            total_price,
-            service:service_id (
-              name
-            )
-          `)
-          .eq('id', bookingId)
-          .eq('clerk_user_id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching booking details:', error);
-          setError('Could not find this booking.');
-        } else if (data) {
-          // Transform the raw data into our Booking type with proper structure
-          const bookingData: Booking = {
-            id: data.id,
-            service_id: data.service_id,
-            address_id: data.address_id,
-            booking_date: data.booking_date,
-            booking_time_slot: data.booking_time_slot,
-            status: data.status,
-            total_price: data.total_price,
-            service: data.service && data.service.length > 0 ? { name: data.service[0].name } : undefined
-          };
-          
-          setBooking(bookingData);
-          // Initialize form with current values
-          setNewDate(data.booking_date);
-          setNewTimeSlot(data.booking_time_slot);
+        // Fetch booking details via API
+        const response = await fetch(`/api/bookings?id=${bookingId}`);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.bookings && data.bookings.length > 0) {
+            const bookingData = data.bookings[0];
+            setBooking(bookingData);
+            // Initialize form with current values
+            setNewDate(bookingData.booking_date);
+            setNewTimeSlot(bookingData.booking_time_slot);
+          } else {
+            setError('Booking not found or you do not have permission to reschedule it.');
+          }
         } else {
-          setError('Booking not found or you do not have permission to reschedule it.');
+          console.error('Error fetching booking details');
+          setError('Could not find this booking.');
         }
       } catch (err) {
         console.error('Unexpected error:', err);
@@ -106,25 +82,34 @@ export default function ReschedulePage() {
     setError(null);
     
     try {
-      const { error } = await supabase
-        .from('bookings')
-        .update({
+      // Update booking via API
+      const response = await fetch(`/api/bookings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: booking.id,
           booking_date: newDate,
           booking_time_slot: newTimeSlot,
-          // Optionally add a note about rescheduling
-          status: 'Rescheduled' // You could keep as 'Scheduled' or use a 'Rescheduled' status
-        })
-        .eq('id', booking.id);
-        
-      if (error) {
-        console.error('Error rescheduling booking:', error);
-        setError(`Failed to reschedule: ${error.message}`);
+          status: 'Rescheduled'
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setSuccess(true);
+          // Wait a moment before redirecting
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 2000);
+        } else {
+          setError(`Failed to reschedule: ${data.error || 'Unknown error'}`);
+        }
       } else {
-        setSuccess(true);
-        // Wait a moment before redirecting
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
+        console.error('Error rescheduling booking');
+        setError('Failed to reschedule booking.');
       }
     } catch (err) {
       console.error('Unexpected error during rescheduling:', err);

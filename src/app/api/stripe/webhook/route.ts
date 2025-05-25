@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { supabaseAdmin } from '@/lib/supabaseClient'; // Uses service_role key for admin access
+import { prisma } from '@/lib/prisma'; // Uses Prisma client
 
 // IMPORTANT: Keep your Stripe secret key and webhook secret secure and out of version control.
 // Use environment variables. Ensure they are set in your deployment environment.
@@ -28,7 +28,7 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
  * Handles incoming webhook events from Stripe, verifies their authenticity using
  * the webhook signing secret, and processes relevant events like
  * 'checkout.session.completed' to update application state (e.g., create
- * booking records in Supabase).
+ * booking records using Prisma).
  *
  * Security Note: Verifying the webhook signature is crucial to ensure requests
  * genuinely originate from Stripe and not a malicious third party.
@@ -36,7 +36,7 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
  * Idempotency Note: Webhook handlers should ideally be idempotent, meaning
  * processing the same event multiple times should not result in duplicate actions
  * (e.g., creating multiple bookings for the same payment). This implementation
- * relies on Supabase potentially handling duplicates based on constraints, but
+ * relies on Prisma's unique constraints to handle duplicates, but
  * explicit checks could be added if needed.
  */
 export async function POST(req: Request) {
@@ -87,45 +87,46 @@ export async function POST(req: Request) {
       if (!clerk_user_id || !serviceId || !addressId || !date || !time || price === undefined) {
          // Log the session ID for easier debugging if metadata is missing
          console.error(`❌ Missing required metadata in checkout.session.completed event. Session ID: ${checkoutSession.id}. Metadata:`, checkoutSession.metadata);
-         // Break prevents further processing for this event, Stripe will retry if it doesn't get a 2xx response.
-         // Consider if a 500 response is more appropriate if this indicates a server-side issue.
-         break;
+         // Return error to Stripe to indicate processing failure - this will trigger retries
+         return NextResponse.json({
+           error: 'Missing required metadata for booking creation',
+           sessionId: checkoutSession.id
+         }, { status: 400 });
       }
 
 
-        // 3. Store booking details in Supabase database
-        // Use supabaseAdmin client which has elevated privileges for backend operations.
+        // 3. Store booking details in database using Prisma
         console.log(`Attempting to create booking for user ${clerk_user_id}, session ${checkoutSession.id}`);
-        const { data: booking, error } = await supabaseAdmin.from('bookings').insert({
-          clerk_user_id,
-          service_id: serviceId,
-          address_id: addressId, // Include the address ID
-          booking_date: date,
-          booking_time_slot: time,
-          status: 'Scheduled', // Initial status after successful payment
-          total_price: parseFloat(price), // Parse price string to float. Assumes price is valid number string.
-          // Store the Stripe Checkout Session ID for reference.
-          // If you need the Payment Intent ID later (e.g., for refunds),
-          // you might need to retrieve the session with expand: ['payment_intent']
-          // or handle the 'payment_intent.succeeded' event separately.
-          stripe_charge_id: checkoutSession.id
-        }).select().single(); // Select the newly created record
+        
+        try {
+          const booking = await prisma.booking.create({
+            data: {
+              clerkUserId: clerk_user_id,
+              serviceId: serviceId,
+              addressId: addressId,
+              bookingDate: new Date(date),
+              // Handle time slot (morning/afternoon) - store as time for morning=08:00, afternoon=13:00
+              bookingTime: time === 'morning' ? new Date('1970-01-01T08:00:00') : new Date('1970-01-01T13:00:00'),
+              status: 'Scheduled',
+              priceAtBooking: parseFloat(price),
+              stripeCheckoutSessionId: checkoutSession.id
+            },
+            select: {
+              id: true
+            }
+          });
 
-      if (error) {
-        // Log detailed error if Supabase insertion fails
-        console.error(`❌ Error creating booking record in Supabase for session ${checkoutSession.id}:`, error);
-        // Consider returning a 500 error to Stripe to signal processing failure,
-        // which might trigger retries depending on your Stripe webhook settings.
-        // For now, we log and break to avoid infinite loops on persistent DB errors.
-      } else if (booking) {
-        // Log success
-        console.log(`✅ Booking created successfully. Booking ID: ${booking.id}, Session ID: ${checkoutSession.id}`);
-        // TODO: Implement Phase 5: Send confirmation notification (e.g., email, SMS)
-        // This could involve calling another service or queuing a job.
-      } else {
-        // Handle unexpected case where insert succeeded but no data returned
-         console.warn(`Booking insert seemed successful for session ${checkoutSession.id}, but no booking data was returned.`);
-      }
+          // Log success
+          console.log(`✅ Booking created successfully. Booking ID: ${booking.id}, Session ID: ${checkoutSession.id}`);
+          // TODO: Implement Phase 5: Send confirmation notification (e.g., email, SMS)
+          // This could involve calling another service or queuing a job.
+        } catch (error) {
+          // Log detailed error if Prisma insertion fails
+          console.error(`❌ Error creating booking record with Prisma for session ${checkoutSession.id}:`, error);
+          // Consider returning a 500 error to Stripe to signal processing failure,
+          // which might trigger retries depending on your Stripe webhook settings.
+          // For now, we log and break to avoid infinite loops on persistent DB errors.
+        }
       break; // End processing for 'checkout.session.completed'
 
     // TODO: Handle other relevant Stripe events if needed

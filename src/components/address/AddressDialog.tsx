@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
-import { supabase } from "@/lib/supabaseClient";
+import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,8 +24,18 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { addressFormSchema } from "@/lib/schemas/address-form-schema";
-import type { AddressFormValues } from "@/lib/schemas/address-form-schema";
+
+// Define the form schema directly to avoid type conflicts
+const formSchema = z.object({
+  street_address: z.string().min(1, "Street address is required"),
+  area: z.string().min(1, "Area/neighborhood is required"),
+  city: z.string().min(1, "City is required"),
+  region: z.string().min(1, "Region/state is required"),
+  postal_code: z.string().optional(),
+  country: z.string().min(1, "Country is required"),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 interface AddressDialogProps {
   onAddressAdded: (address: any) => void;
@@ -36,9 +46,8 @@ export function AddressDialog({ onAddressAdded }: AddressDialogProps) {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Explicitly set the type for form
-  const form = useForm<AddressFormValues>({
-    resolver: zodResolver(addressFormSchema),
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       street_address: "",
       area: "",
@@ -49,39 +58,47 @@ export function AddressDialog({ onAddressAdded }: AddressDialogProps) {
     },
   });
 
-  const onSubmit = async (values: AddressFormValues) => {
+  const onSubmit = async (values: FormValues) => {
     if (!user) return;
     
     setIsSubmitting(true);
     try {
-      // Insert new address into Supabase
-      const { data: newAddress, error } = await supabase
-        .from("addresses")
-        .insert({
-          ...values,
-          clerk_user_id: user.id,
-        })
-        .select()
-        .single();
+      // Convert form values to API format (camelCase)
+      const addressData = {
+        streetAddress: values.street_address,
+        area: values.area,
+        city: values.city,
+        region: values.region,
+        postalCode: values.postal_code || undefined,
+        country: values.country,
+      };
 
-      if (error) {
-        console.error("Error saving address:", error);
-        form.setError("root", { 
-          message: "Failed to save address. Please try again." 
-        });
-        return;
+      // Call API to create address
+      const response = await fetch('/api/addresses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(addressData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save address');
       }
 
+      const result = await response.json();
+
       // Call the callback with the new address
-      if (newAddress) {
-        onAddressAdded(newAddress);
+      if (result.address) {
+        onAddressAdded(result.address);
         form.reset();
         setOpen(false);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error in address submission:", err);
       form.setError("root", { 
-        message: "An unexpected error occurred. Please try again." 
+        message: err.message || "An unexpected error occurred. Please try again." 
       });
     } finally {
       setIsSubmitting(false);

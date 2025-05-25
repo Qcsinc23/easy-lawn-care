@@ -1,49 +1,52 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdminClient'; // Corrected import path
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 /**
- * Server-side API route to fetch available services.
- * This endpoint securely fetches the list of services using the server-side
- * Supabase admin client, bypassing any potential RLS issues for public data.
+ * @fileoverview API routes for service management
+ * Handles fetching available services
+ * Replaces direct Supabase client calls with secure server-side operations
  */
-export async function GET() {
-  console.log("API Route /api/services invoked."); // Log route invocation
+
+/**
+ * GET /api/services
+ * Fetch all available services
+ * This endpoint is public as services are displayed to all users
+ */
+export async function GET(request: NextRequest) {
   try {
-    console.log("Attempting to fetch services using supabaseAdmin...");
-    // Fetch services using the admin client to bypass RLS
-    // Fetch only *active* services using the admin client
-    const { data, error, status } = await supabaseAdmin
-      .from('services')
-      .select('*')
-      .eq('is_active', true); // Filter for active services only
-      // .order('display_order', { ascending: true }); // Removed: Column does not exist
+    // Fetch all services ordered by display order
+    const services = await prisma.service.findMany({
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        features: true,
+        includesMedia: true,
+        isCustom: true,
+        displayOrder: true
+      },
+      orderBy: {
+        displayOrder: 'asc'
+      }
+    });
 
-    console.log(`Supabase query completed (fetching active services). Status: ${status}, Error: ${error ? JSON.stringify(error) : 'null'}, Data received: ${!!data}`);
+    // Convert price from Decimal to number for frontend compatibility
+    const servicesWithNumericPrice = services.map((service: any) => ({
+      ...service,
+      price: service.price ? parseFloat(service.price.toString()) : null
+    }));
 
-    if (error) {
-      console.error('Supabase error fetching services via API:', error);
-      return NextResponse.json(
-        { error: 'Failed to load available services from Supabase', details: error.message },
-        { status: status || 500 } // Use Supabase status if available
-      );
-    }
-
-    if (!data) {
-      console.warn('No services data received from Supabase, returning empty array.');
-      return NextResponse.json([]);
-    }
-
-    console.log(`Successfully fetched ${data.length} services.`);
-    return NextResponse.json(data);
-
-  } catch (error: any) { // Catch any unexpected errors
-    console.error('Unexpected server error in /api/services:', error);
+    return NextResponse.json({
+      success: true,
+      services: servicesWithNumericPrice
+    });
+    
+  } catch (error: any) {
+    console.error('Error fetching services:', error);
     return NextResponse.json(
-      { error: 'Internal server error processing request', details: error.message },
+      { error: 'Failed to fetch services', details: error?.message || 'Unknown error' },
       { status: 500 }
     );
   }
 }
-
-// Optional: Add revalidation settings if needed
-// export const revalidate = 60; // Revalidate every 60 seconds

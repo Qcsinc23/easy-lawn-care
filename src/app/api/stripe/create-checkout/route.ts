@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { currentUser } from '@clerk/nextjs/server';
+import mockStripe from '@/lib/mock-stripe';
 
 /**
  * @fileoverview API route handler for creating Stripe Checkout sessions.
@@ -13,11 +14,48 @@ import { currentUser } from '@clerk/nextjs/server';
  * - NEXT_PUBLIC_APP_URL: The base URL of your application for constructing redirect URLs.
  */
 
-// Ensure Stripe secret key is available
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY environment variable is not set.');
+// Initialize Stripe client
+let stripeClient: any;
+
+// Function to initialize Stripe client - separated for better error handling
+const initializeStripe = () => {
+  // Check if we should use real Stripe
+  if (process.env.USE_MOCK_STRIPE !== 'true') {
+    try {
+      // Get Stripe API key
+      const apiKey = process.env.STRIPE_SECRET_KEY;
+      
+      if (!apiKey) {
+        throw new Error('STRIPE_SECRET_KEY environment variable is not set.');
+      }
+      
+      if (!apiKey.startsWith('sk_')) {
+        throw new Error('Invalid STRIPE_SECRET_KEY format.');
+      }
+      
+      // Initialize real Stripe
+      const stripe = new Stripe(apiKey);
+      console.log('Using REAL Stripe implementation with key type:', 
+        apiKey.startsWith('sk_test_') ? 'TEST KEY' : 
+        apiKey.startsWith('sk_live_') ? 'LIVE KEY' : 'UNKNOWN KEY FORMAT');
+      return stripe;
+    } catch (error) {
+      console.error('Failed to initialize real Stripe:', error);
+      throw error; // Re-throw to be caught by caller
+    }
+  } else {
+    // Use mock implementation when explicitly enabled via environment variable
+    console.warn('Using MOCK Stripe implementation. No real payments will be processed.');
+    return mockStripe;
+  }
+};
+
+// Try to initialize Stripe - will throw an error if it fails
+try {
+  stripeClient = initializeStripe();
+} catch (error) {
+  console.error('Stripe initialization failed, payments will not work:', error);
 }
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Ensure the base URL is available for redirects
 if (!process.env.NEXT_PUBLIC_APP_URL) {
@@ -38,6 +76,14 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL;
  */
 export async function POST(req: Request) {
   try {
+    // Confirm Stripe is initialized
+    if (!stripeClient) {
+      return NextResponse.json(
+        { error: 'Payment processor is not configured. Please contact support.' },
+        { status: 500 }
+      );
+    }
+
     // 1. Authenticate the user
     const user = await currentUser();
     if (!user) {
@@ -61,6 +107,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing or invalid booking details.' }, { status: 400 });
     }
     
+    // Enforce Stripe's minimum payment amount (50 cents)
+    const MINIMUM_PAYMENT_AMOUNT = 50; // 50 cents minimum for Stripe
+    if (price < MINIMUM_PAYMENT_AMOUNT) {
+      console.warn(`Payment amount too small: ${price} cents. Minimum required: ${MINIMUM_PAYMENT_AMOUNT} cents`);
+      return NextResponse.json({ 
+        error: `Payment amount must be at least $${MINIMUM_PAYMENT_AMOUNT/100} USD.` 
+      }, { status: 400 });
+    }
+    
     // Assessment data is optional but must be valid if provided
     if (assessment && typeof assessment !== 'object') {
       console.warn('Invalid assessment data provided:', assessment);
@@ -68,20 +123,19 @@ export async function POST(req: Request) {
     }
 
     // 3. Prepare Stripe session data
-    // Price is received from the frontend (in dollars), convert to cents for Stripe
-    const calculatedAmount = Math.round(price * 100);
+    // Price is received from the frontend, assumed to be in cents based on frontend component comment.
+    const calculatedAmount = Math.round(price); // Assuming price is already in cents
 
-    const session = await stripe.checkout.sessions.create(
-      {
+    try {
+      const session = await stripeClient.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
           {
             price_data: {
               currency: 'usd',
               product_data: {
-                // Consider making the product name more specific if you offer different core services
-                name: 'Lawn Care Service Booking',
-                description: `Service scheduled for ${date} at ${time}`, // Slightly clearer description
+                name: 'Lawn Care Service',
+                description: `Service scheduled for ${date} at ${time}`,
               },
               unit_amount: calculatedAmount, // Amount in cents
             },
@@ -95,43 +149,60 @@ export async function POST(req: Request) {
         success_url: `${appUrl}/booking/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${appUrl}/booking`,
         // Metadata is crucial for linking the Stripe payment back to your application's data
-        // during webhook processing (e.g., in the webhook handler to update booking status).
         metadata: {
           userId: user.id, // Clerk user ID
           serviceId,       // Your application's service identifier
           addressId,       // Your application's address identifier
           date,            // Scheduled date
           time,            // Scheduled time
-          price: price.toString(), // Store original price (in dollars) as a string
+          price: price.toString(), // Store original price (in cents) as a string
           ...(assessment && { assessment: JSON.stringify(assessment) }), // Include assessment data if available
         },
-      } // Removed unnecessary type assertion 'as Stripe.Checkout.SessionCreateParams' as the object should match
-    );
+      });
 
-    // 4. Return the session ID
-    console.log(`Stripe Checkout session created for user ${user.id}: ${session.id}`);
-    return NextResponse.json({ sessionId: session.id });
-
+      // 4. Return the session ID
+      console.log(`Stripe Checkout session created for user ${user.id}: ${session.id}`);
+      return NextResponse.json({ sessionId: session.id });
+    } catch (stripeError: any) {
+      // Handle Stripe-specific errors with more detailed logging
+      console.error('Stripe error creating checkout session:', stripeError);
+      
+      let errorMessage = 'Payment processing error. Please try again later.';
+      let statusCode = 500;
+      
+      // Map common Stripe errors to user-friendly messages
+      if (stripeError.type === 'StripeCardError') {
+        errorMessage = 'Your card was declined. Please try a different payment method.';
+        statusCode = 400;
+      } else if (stripeError.type === 'StripeInvalidRequestError') {
+        errorMessage = 'Invalid payment request. Please check your information and try again.';
+        statusCode = 400;
+      } else if (stripeError.type === 'StripeAuthenticationError') {
+        // Don't expose API key issues to the client
+        console.error('Stripe API key authentication error:', stripeError.message);
+        errorMessage = 'Payment system configuration error. Please contact support.';
+        statusCode = 500;
+      } else if (stripeError.type === 'StripeAPIError') {
+        errorMessage = 'Stripe API error. Please try again later.';
+        statusCode = 503;
+      } else if (stripeError.type === 'StripeConnectionError') {
+        errorMessage = 'Could not connect to payment processor. Please try again later.';
+        statusCode = 503;
+      } else if (stripeError.type === 'StripeRateLimitError') {
+        errorMessage = 'Too many payment requests. Please try again in a few minutes.';
+        statusCode = 429;
+      }
+      
+      return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    }
   } catch (error) {
     // Log the detailed error server-side
-    console.error('Error creating Stripe checkout session:', error);
-
+    console.error('Unexpected error creating checkout session:', error);
+    
     // Return a generic error response to the client
-    // Avoid exposing detailed Stripe errors or internal logic.
     return NextResponse.json(
       { error: 'Failed to initiate payment. Please try again later.' },
       { status: 500 }
     );
   }
 }
-
-// --- Removed old calculateServicePrice function ---
-// Price calculation is now expected to happen on the client-side before calling this API.
-
-// Remove the old calculateServicePrice function as price is now passed from frontend
-// function calculateServicePrice(serviceId: string, lawnSize: number) {
-//   // Logic to calculate price based on service type and lawn size
-//   const basePrice = 50 // Base price in cents
-//   const sizeMultiplier = lawnSize / 1000 // Price per 1000 sq ft
-//   return Math.round(basePrice * sizeMultiplier * 100) // Convert to cents
-// }

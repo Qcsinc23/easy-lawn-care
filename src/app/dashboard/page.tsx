@@ -1,95 +1,191 @@
-import { currentUser } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
-import { supabaseAdmin } from '@/lib/supabaseClient'; // Import supabaseAdmin
+'use client';
+
+import { useUser } from '@clerk/nextjs';
+import { redirect, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 
 /**
  * @fileoverview User dashboard page component.
- * Displays the logged-in user's bookings fetched from Supabase.
+ * Displays the logged-in user's bookings fetched from API endpoints.
  * Allows users to view booking details, cancel, or reschedule upcoming services.
  */
 
 /**
- * Represents a booking record fetched from the database, including related service details.
+ * Represents a booking record fetched from the API, including related service details.
  */
 interface Booking {
   /** Unique identifier for the booking. */
   id: string;
   /** Foreign key referencing the service booked. */
-  service_id: string;
+  serviceId: string;
   /** Optional nested object containing the name of the booked service. */
   service?: {
     name: string;
   };
   /** Foreign key referencing the user's address for the service. */
-  address_id: string;
+  addressId: string;
   /** The scheduled date for the service (YYYY-MM-DD). */
-  booking_date: string;
-  /** The selected time slot ('morning' or 'afternoon'). */
-  booking_time_slot: string;
+  bookingDate: string;
+  /** The selected time slot (stored as time). */
+  bookingTime: string;
   /** Current status of the booking (e.g., 'Scheduled', 'Completed', 'Cancelled'). */
   status: string;
   /** The final price paid for the booking. */
-  total_price: number;
+  priceAtBooking: number;
   /** Optional Stripe charge ID if payment was processed. */
-  stripe_charge_id?: string;
+  stripeCheckoutSessionId?: string;
 }
 
 /**
  * Renders the user dashboard page.
- * Fetches the current user via Clerk and their associated bookings from Supabase
- * using the admin client for secure data access. Displays bookings in a list format
+ * Fetches the current user via Clerk and their associated bookings from API endpoints
+ * for secure data access. Displays bookings in a list format
  * with options to cancel or reschedule based on the booking status.
  * Redirects unauthenticated users to the sign-in page.
  */
-export default async function Dashboard() {
-  // Get the current logged-in user from Clerk
-  const user = await currentUser();
-  // Redirect to sign-in if no user is found
-  if (!user) redirect('/sign-in');
+export default function Dashboard() {
+  const { user, isLoaded } = useUser();
+  const searchParams = useSearchParams();
+  const shouldRefresh = searchParams.get('refresh') === 'true';
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Fetch bookings with related service details for the current user using Supabase Admin client
-  // Note: Using supabaseAdmin ensures data fetching happens securely on the server.
-  const { data: bookings, error } = await supabaseAdmin
-    .from('bookings')
-    .select(`
-      *,
-      service:service_id (
-        name
-      )
-    `) 
-    .eq('clerk_user_id', user.id) // Filter by the Clerk user ID
-    .order('booking_date', { ascending: false }); // Order bookings by date, newest first
+  // Check for authentication
+  useEffect(() => {
+    if (isLoaded && !user) {
+      redirect('/sign-in');
+    }
+  }, [isLoaded, user]);
+  
+  // Trigger immediate refresh if coming from success page
+  useEffect(() => {
+    if (shouldRefresh) {
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [shouldRefresh]);
 
-  // Log any errors during fetching, the UI will display a generic error message
-  if (error) {
-    console.error('Error fetching bookings:', error);
-    // UI handles displaying a user-friendly error message below
+  // Fetch bookings when component mounts or refreshTrigger changes
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchBookings = async () => {
+      setLoading(true);
+      
+      try {
+        // Fetch bookings via API endpoint
+        const response = await fetch('/api/bookings');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch bookings');
+        }
+        
+        const data = await response.json();
+        setBookings(data.bookings || []);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching bookings:', err);
+        setError('Error loading bookings. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookings();
+    
+    // Set up automatic refresh every 5 seconds
+    const intervalId = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [user, refreshTrigger]);
+  
+  // Handle booking cancellation
+  const handleCancelBooking = async (bookingId: string) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingId,
+          status: 'Cancelled'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to cancel booking');
+      }
+
+      // Refresh bookings after cancellation
+      setRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      console.error('Error cancelling booking:', err);
+      setError('Failed to cancel booking. Please try again.');
+    }
+  };
+  
+  // Manual refresh button handler
+  const handleManualRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Show loading state if authentication is still loading
+  if (!isLoaded) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-8">
+        <p>Loading user data...</p>
+      </div>
+    );
   }
 
   // Render the main dashboard layout
   return (
     <div className="flex min-h-screen flex-col items-center p-8 md:p-24">
       {/* Welcome message using the user's first name */}
-      <h1 className="text-4xl font-bold text-green-800 mb-8">Welcome, {user.firstName}!</h1>
+      <h1 className="text-4xl font-bold text-green-800 mb-8">Welcome, {user?.firstName}!</h1>
 
       {/* Container for the bookings section */}
       <div className="w-full max-w-4xl">
-        <h2 className="text-2xl font-semibold text-green-700 mb-6">Your Bookings</h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-semibold text-green-700">Your Bookings</h2>
+          <button 
+            onClick={handleManualRefresh}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+            Refresh
+          </button>
+        </div>
+
+        {/* Loading indicator */}
+        {loading && (
+          <div className="flex justify-center my-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-700"></div>
+          </div>
+        )}
 
         {/* Display error message if fetching failed */}
         {error && (
-          <p className="text-red-600">Error loading bookings. Please try again later.</p>
+          <p className="text-red-600 mb-4">{error}</p>
         )}
 
-        {/* Display message if there are no bookings or if fetching is still in progress (and no error) */}
-        {!error && (!bookings || bookings.length === 0) ? (
+        {/* Display message if there are no bookings */}
+        {!loading && !error && bookings.length === 0 && (
           <p className="text-gray-600">You have no upcoming bookings.</p>
-        ) : (
-          // Grid layout for booking cards
+        )}
+
+        {/* Grid layout for booking cards */}
+        {!loading && bookings.length > 0 && (
           <div className="grid grid-cols-1 gap-6">
             {/* Map through the fetched bookings and render a card for each */}
-            {bookings?.map((booking: Booking) => (
+            {bookings.map((booking: Booking) => (
               <div key={booking.id} className="border p-6 rounded-lg shadow-md bg-white">
                 {/* Flex container for booking details and ID */}
                 <div className="flex justify-between items-start">
@@ -100,10 +196,10 @@ export default async function Dashboard() {
                       {booking.service?.name || 'Lawn Care Service'}
                     </h3>
                     {/* Display formatted booking date */}
-                    <p className="text-gray-700 mb-1">Date: {new Date(booking.booking_date).toLocaleDateString()}</p>
+                    <p className="text-gray-700 mb-1">Date: {new Date(booking.bookingDate).toLocaleDateString()}</p>
                     {/* Display formatted time slot */}
                     <p className="text-gray-700 mb-1">
-                      Time: {booking.booking_time_slot === 'morning' ? 'Morning (8 AM - 12 PM)' : 'Afternoon (1 PM - 5 PM)'}
+                      Time: {booking.bookingTime.includes('08:00') ? 'Morning (8 AM - 12 PM)' : 'Afternoon (1 PM - 5 PM)'}
                     </p>
                     {/* Display booking status with conditional styling */}
                     <p className="text-gray-700 mb-1">
@@ -112,7 +208,7 @@ export default async function Dashboard() {
                       </span>
                     </p>
                     {/* Display total price */}
-                    <p className="text-gray-700 mb-1">Total Price: ${booking.total_price.toFixed(2)}</p>
+                    <p className="text-gray-700 mb-1">Total Price: ${booking.priceAtBooking.toFixed(2)}</p>
                   </div>
                   {/* Booking ID (truncated) */}
                   <div className="text-right">
@@ -125,25 +221,13 @@ export default async function Dashboard() {
                 {/* Conditionally render action buttons only for 'Scheduled' bookings */}
                 {booking.status === 'Scheduled' && (
                   <div className="mt-4 flex space-x-2">
-                    {/* Form containing a server action to cancel the booking */}
-                    <form action={async () => {
-                      'use server'; // Indicate this is a Server Action
-                      // Update booking status to 'Cancelled' in Supabase
-                      await supabaseAdmin
-                        .from('bookings')
-                        .update({ status: 'Cancelled' })
-                        .eq('id', booking.id);
-                      // Redirect back to the dashboard to reflect the change
-                      redirect('/dashboard');
-                    }}>
-                      {/* Cancel button */}
-                      <button
-                        type="submit"
-                        className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm"
-                      >
-                        Cancel Booking
-                      </button>
-                    </form>
+                    {/* Cancel button */}
+                    <button
+                      onClick={() => handleCancelBooking(booking.id)}
+                      className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded text-sm"
+                    >
+                      Cancel Booking
+                    </button>
                     {/* Link to the reschedule page, passing the booking ID */}
                     <Link
                       href={`/booking/reschedule?id=${booking.id}`}

@@ -5,10 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 import { Loader2, Plus } from "lucide-react";
 import { bookingFormSchema } from "@/lib/schemas/booking-form-schema";
 import type { BookingFormValues } from "@/lib/schemas/booking-form-schema";
+import { dollarsToCents } from "@/lib/stripe";
 
 import CheckoutButton from "@/components/payments/checkout-button";
 import { Button } from "@/components/ui/button";
@@ -93,31 +93,40 @@ export default function BookingPage() {
       }
 
       // Fetch Services
-      const { data: servicesData, error: servicesError } = await supabase
-        .from("services")
-        .select("*")
-        .eq("is_active", true)
-        .order("price", { ascending: true });
-
-      if (servicesError) {
-        console.error("Error fetching services:", servicesError);
+      try {
+        const servicesResponse = await fetch("/api/services");
+        if (servicesResponse.ok) {
+          const servicesData = await servicesResponse.json();
+          if (servicesData.success) {
+            setServices(servicesData.services || []);
+          } else {
+            setServicesError("Failed to load available services.");
+          }
+        } else {
+          setServicesError("Failed to load available services.");
+        }
+      } catch (error) {
+        console.error("Error fetching services:", error);
         setServicesError("Failed to load available services.");
-      } else {
-        setServices(servicesData || []);
       }
       setLoadingServices(false);
 
       // Fetch Addresses
-      const { data: addressesData, error: addressesError } = await supabase
-        .from("addresses")
-        .select("*")
-        .eq("clerk_user_id", user.id);
-
-      if (addressesError) {
-        console.error("Error fetching addresses:", addressesError);
+      try {
+        const addressesResponse = await fetch("/api/addresses");
+        if (addressesResponse.ok) {
+          const addressesData = await addressesResponse.json();
+          if (addressesData.success) {
+            setAddresses(addressesData.addresses || []);
+          } else {
+            setAddressesError("Failed to load addresses.");
+          }
+        } else {
+          setAddressesError("Failed to load addresses.");
+        }
+      } catch (error) {
+        console.error("Error fetching addresses:", error);
         setAddressesError("Failed to load addresses.");
-      } else {
-        setAddresses(addressesData || []);
       }
       setLoadingAddresses(false);
     }
@@ -161,8 +170,11 @@ export default function BookingPage() {
     );
   }
 
-  // Get the price for the selected service
-  const servicePrice = selectedService ? selectedService.price : 0;
+  // Get the price for the selected service (in dollars)
+  const servicePriceDollars = selectedService ? (selectedService.price || 0) : 0;
+  
+  // Convert dollars to cents for Stripe
+  const servicePriceCents = dollarsToCents(servicePriceDollars);
   
   // Check if the form is valid to show the booking summary
   const isFormValid = form.formState.isValid && 
@@ -197,7 +209,7 @@ export default function BookingPage() {
                     <SelectContent>
                       {services.map((service) => (
                         <SelectItem key={service.id} value={service.id}>
-                          {service.name} - ${service.price.toFixed(2)}
+                          {service.name} - ${service.price ? service.price.toFixed(2) : 'Price TBD'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -334,7 +346,7 @@ export default function BookingPage() {
                   </div>
                   <div className="flex justify-between font-medium text-lg mt-2 pt-2 border-t border-gray-200">
                     <dt>Total:</dt>
-                    <dd className="text-green-700">${servicePrice.toFixed(2)}</dd>
+                    <dd className="text-green-700">${servicePriceDollars ? servicePriceDollars.toFixed(2) : 'Price TBD'}</dd>
                   </div>
                 </dl>
                 {selectedService && (
@@ -358,7 +370,7 @@ export default function BookingPage() {
                   addressId={form.watch("addressId")}
                   date={form.watch("date")}
                   time={form.watch("timeSlot")}
-                  price={servicePrice}
+                  price={servicePriceCents}
                   disabled={!isFormValid}
                 />
               </div>

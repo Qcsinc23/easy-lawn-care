@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 // Removed unused useRouter import
-import { getStripe } from '@/lib/stripe';
+import { getStripe, dollarsToCents, meetsStripeMinimum } from '@/lib/stripe';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -62,6 +62,14 @@ export default function CheckoutButton({
     if (disabled) return; // Prevent action if button is disabled
     setError(null); // Clear previous errors
     setLoading(true);
+    
+    // Make sure price meets Stripe's minimum requirement
+    if (!meetsStripeMinimum(price)) {
+      setError(`Payment amount must be at least $0.50 USD (${price} cents provided).`);
+      setLoading(false);
+      return;
+    }
+    
     console.log('Initiating checkout with:', { serviceId, addressId, date, time, price });
 
     try {
@@ -85,7 +93,9 @@ export default function CheckoutButton({
         try {
           const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
+          console.error('Checkout API error response:', errorData);
         } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
           // Ignore if response body is not JSON or empty
         }
         throw new Error(errorMessage);
@@ -113,9 +123,28 @@ export default function CheckoutButton({
         console.error('Stripe redirection error:', stripeError);
         // Optionally, display an error message to the user here.
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error during checkout process:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred.');
+      
+      // Safely handle errors with proper type checking
+      if (error instanceof Error) {
+        // Check if Stripe.js loaded
+        if (error.message === 'Stripe.js failed to load.') {
+          setError('Payment system initialization failed. Please ensure you have a stable internet connection and try again.');
+        } 
+        // Check for environment variable issues
+        else if (error.message.includes('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY')) {
+          setError('Payment system configuration error. Please contact support.');
+          console.error('Missing Stripe publishable key in environment variables');
+        }
+        // Handle other Error instances
+        else {
+          setError(error.message);
+        }
+      } else {
+        // Handle non-Error objects
+        setError('An unknown error occurred.');
+      }
     } finally {
       setLoading(false);
     }

@@ -1,113 +1,147 @@
-# EasyLawnCare Database Migration Scripts
+# EasyLawnCare Database Utility Scripts
 
-This directory contains scripts to apply database migrations to your Supabase database using the Supabase CLI.
+This directory contains utility scripts for working with the Prisma database and other development tasks.
 
 ## Prerequisites
 
-- Bash shell (Git Bash or WSL on Windows)
-- Supabase CLI (the script will attempt to install it if not found)
-- Supabase project URL and service role key (already configured in `.env.local`)
+- Node.js and npm installed
+- Prisma CLI (installed as a dev dependency)
+- PostgreSQL database (configured via `DATABASE_URL` in `.env.local`)
 
-## Running the Migration
+## Available Scripts
 
-### For Linux/Mac/Git Bash Users
+### Database Verification Scripts
 
-To apply the custom_assessments table migration to your Supabase database using Bash:
+#### `check-bookings-comprehensive.js`
+**Primary booking verification script** - A comprehensive tool for examining booking data.
 
 ```bash
-# Make the script executable (may be needed on Unix-based systems)
-chmod +x apply-migration.sh
-
-# Run the migration script
-./apply-migration.sh
+# Run the comprehensive booking check
+node scripts/check-bookings-comprehensive.js
 ```
 
-### For Windows Users
+Features:
+- Displays detailed booking information with relationships (service, address, profile, media)
+- Shows formatted output with emojis for easy reading
+- Includes summary statistics (status counts, total revenue)
+- Handles error reporting with stack traces
+- Displays up to 10 most recent bookings
 
-For Windows PowerShell users:
+#### `check-bookings.js`
+**Alternative booking check** - A simpler booking verification script.
 
-```powershell
-# Run the PowerShell script
-.\apply-migration.ps1
+```bash
+# Run the basic booking check
+node scripts/check-bookings.js
 ```
 
-For Command Prompt users:
+Features:
+- Basic booking information display
+- Uses selective field querying for performance
+- Shows up to 10 most recent bookings
 
-```cmd
-# Run the batch script
-apply-migration.bat
+### Migration Scripts
+
+#### `apply-migration.js` & `apply-migration-direct.js`
+Legacy migration scripts from the Supabase era. These are kept for reference but are no longer actively used since migrating to Prisma.
+
+#### `apply-migration.ps1`
+PowerShell migration script for Windows users during the Supabase era.
+
+### Development Scripts
+
+#### `simulate-webhook-event.js`
+Simulates Stripe webhook events for testing payment processing.
+
+```bash
+# Simulate a webhook event
+node scripts/simulate-webhook-event.js
 ```
 
-Both scripts will:
+## Prisma Database Management
 
-1. Check if Supabase CLI is installed and help you install it if needed
-2. Extract the project reference from your Supabase URL
-3. Log in to Supabase using your service role key
-4. Execute the SQL migration file using the Supabase CLI
-5. Log out from Supabase when done
+### Running Migrations
 
-## What This Migration Does
+The application now uses Prisma for database management. The migrations are stored in `prisma/migrations/` and managed through Prisma CLI:
 
-The migration creates a new `custom_assessments` table that stores assessment requests for the Custom Service option. This table is necessary for the booking flow when customers select the Custom Service option.
+```bash
+# Apply pending migrations
+npx prisma migrate deploy
 
-## Verifying Success
+# Create a new migration
+npx prisma migrate dev --name your_migration_name
 
-After running the migration:
-
-1. Log into your Supabase dashboard at https://app.supabase.com
-2. Navigate to your project (ID: kzucwrtsczksvoemzypd)
-3. Go to the Table Editor
-4. Verify that the `custom_assessments` table exists with the correct schema
-
-## If Migration Fails
-
-If you encounter any issues with the migration:
-
-1. Check the error message in the console output
-2. Verify your Supabase credentials in `.env.local`
-3. Try running the migration SQL directly in the Supabase SQL Editor
-
-SQL to run manually in Supabase SQL Editor if needed:
-
-```sql
-CREATE TABLE IF NOT EXISTS public.custom_assessments (
-    id uuid PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
-    clerk_user_id text NOT NULL,
-    service_id uuid NOT NULL REFERENCES public.services(id),
-    address_id uuid NOT NULL REFERENCES public.addresses(id),
-    preferred_date date NOT NULL,
-    preferred_time text NOT NULL CHECK (preferred_time IN ('morning', 'afternoon')),
-    assessment_data jsonb NOT NULL,
-    status text NOT NULL CHECK (status IN ('Pending', 'Scheduled', 'Completed', 'Cancelled')),
-    notes text,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Add updated_at trigger
-DROP TRIGGER IF EXISTS on_custom_assessments_updated ON public.custom_assessments;
-CREATE TRIGGER on_custom_assessments_updated
-  BEFORE UPDATE ON public.custom_assessments
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_updated_at();
-
--- RLS Policy: Users can access only their own assessment requests
-ALTER TABLE public.custom_assessments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow individual user access to their own assessment requests" ON public.custom_assessments;
-CREATE POLICY "Allow individual user access to their own assessment requests" ON public.custom_assessments
-    FOR ALL
-    USING (clerk_user_id = current_setting('request.jwt.claims', true)::jsonb ->> 'sub');
-
--- Create index for faster querying by user
-CREATE INDEX IF NOT EXISTS idx_custom_assessments_clerk_user_id ON public.custom_assessments(clerk_user_id);
+# Reset database (development only)
+npx prisma migrate reset
 ```
 
-## Manual Verification Steps
+### Database Introspection
 
-After successfully applying the migration:
+```bash
+# Generate Prisma client
+npx prisma generate
 
-1. Start your application locally
-2. Navigate to the booking page
-3. Verify that all 4 services appear in the dropdown menu
-4. Try selecting each service to ensure they all work correctly
-5. Book a Custom Service and verify that the assessment is saved to the `custom_assessments` table
+# View current database schema
+npx prisma db pull
+
+# Open Prisma Studio for GUI database management
+npx prisma studio
+```
+
+## Database Schema
+
+The application uses the following main tables:
+- `profiles` - User profiles linked to Clerk authentication
+- `services` - Available lawn care services
+- `addresses` - Customer service locations
+- `bookings` - Scheduled service appointments
+- `booking_media` - Before/after photos
+- `custom_assessments` - Custom service assessment requests
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Issues**
+   - Verify `DATABASE_URL` in `.env.local` is correct
+   - Ensure database is accessible
+   - Check Prisma client is generated: `npx prisma generate`
+
+2. **Migration Issues**
+   - Check migration history: `npx prisma migrate status`
+   - Resolve drift: `npx prisma migrate resolve`
+   - For development: `npx prisma migrate reset`
+
+3. **Script Execution Issues**
+   - Ensure you're running from the project root
+   - Verify Node.js dependencies are installed: `npm install`
+   - Check that `.env.local` exists and contains required variables
+
+### Verifying Database State
+
+After making changes or debugging issues:
+
+1. **Check Bookings**: Run `node scripts/check-bookings-comprehensive.js`
+2. **Prisma Studio**: Run `npx prisma studio` for GUI access
+3. **Direct Query**: Use your database client or Prisma Studio
+
+## Environment Configuration
+
+Required environment variables in `.env.local`:
+```
+DATABASE_URL="your_postgresql_connection_string"
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="your_clerk_key"
+CLERK_SECRET_KEY="your_clerk_secret"
+```
+
+## Migration from Supabase
+
+This project was successfully migrated from Supabase to Prisma. The following changes were made:
+
+1. **Database Client**: Switched from `@supabase/supabase-js` to `@prisma/client`
+2. **Schema Management**: Converted SQL migrations to Prisma schema
+3. **Query Interface**: Updated all database queries to use Prisma syntax
+4. **Authentication**: Maintained Clerk integration with updated database queries
+5. **Script Consolidation**: Removed duplicate scripts and created comprehensive alternatives
+
+For development, use the Prisma workflow instead of direct SQL migrations.

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdminClient'; // Use the dedicated admin client
+import { prisma } from '@/lib/prisma'; // Use the Prisma client
 import { currentUser } from '@clerk/nextjs/server';
 
 /**
  * Server-side API route to handle custom assessment submissions.
  * This endpoint securely creates a new custom assessment record in the database
- * using the server-side Supabase client with proper authentication.
+ * using the Prisma client with proper authentication.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -37,50 +37,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Insert assessment data using server-side supabaseAdmin
-    const { data, error } = await supabaseAdmin
-      .from('custom_assessments')
-      .insert({
-        clerk_user_id: user.id,
-        service_id,
-        address_id,
-        preferred_date,
-        preferred_time,
-        assessment_data,
+    // Insert assessment data using Prisma client
+    const customAssessment = await prisma.customAssessment.create({
+      data: {
+        clerkUserId: user.id,
+        serviceId: service_id,
+        addressId: address_id,
+        preferredDate: new Date(preferred_date),
+        preferredTime: preferred_time,
+        assessmentData: assessment_data,
         status: 'Pending'
-      })
-      .select('id')
-      .single();
-    if (error) {
-      // Enhanced logging for Supabase errors
-      // Enhanced logging for Supabase errors - Log the full error object
-      console.error('Error creating assessment (Supabase):', JSON.stringify(error, null, 2));
-
-      // Attempt to extract more specific details from the PostgREST error object
-      // Supabase error objects might have code, details, hint, message
-      const errorInfo = {
-        message: error?.message || 'N/A',
-        code: error?.code || 'N/A',
-        details: error?.details || 'N/A',
-        hint: error?.hint || 'N/A',
-        fullErrorString: JSON.stringify(error) || '{}'
-      };
-      console.error('Extracted Supabase Error Details:', errorInfo); // Log extracted details server-side
-
-      return NextResponse.json(
-        {
-          error: 'Failed to create assessment',
-          // Send a more structured error detail string back to the client
-          details: `Supabase Error - Code: ${errorInfo.code}, Details: ${errorInfo.details}, Hint: ${errorInfo.hint}, Message: ${errorInfo.message}`
-        },
-        { status: 500 }
-      );
-    }
+      },
+      select: {
+        id: true
+      }
+    });
 
     return NextResponse.json({
       success: true,
       message: 'Assessment request submitted successfully',
-      assessment_id: data.id
+      assessment_id: customAssessment.id
     });
     
   } catch (error: any) { // Added : any for better logging

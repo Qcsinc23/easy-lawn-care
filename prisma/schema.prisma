@@ -1,0 +1,134 @@
+// Prisma schema for Easy Lawn Care application
+// Converted from Supabase SQL migrations to Prisma models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User profiles linked to Clerk authentication
+model Profile {
+  id                      String   @id @default(uuid())
+  clerkUserId            String   @unique @map("clerk_user_id")
+  phoneNumber            String?  @map("phone_number")
+  notificationPreference String?  @map("notification_preference")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bookings               Booking[]
+  addresses              Address[]
+  customAssessments      CustomAssessment[]
+
+  @@map("profiles")
+  @@index([clerkUserId])
+}
+
+// Service tiers offered by the company
+model Service {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  price         Decimal? @db.Decimal(10, 2)
+  features      Json?    @db.JsonB
+  includesMedia Boolean  @default(false) @map("includes_media")
+  isCustom      Boolean  @default(false) @map("is_custom")
+  displayOrder  Int?     @map("display_order") @db.SmallInt
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bookings          Booking[]
+  customAssessments CustomAssessment[]
+
+  @@map("services")
+}
+
+// Customer addresses for service locations
+model Address {
+  id            String   @id @default(uuid())
+  clerkUserId   String   @map("clerk_user_id")
+  streetAddress String   @map("street_address")
+  area          String
+  city          String
+  region        String
+  postalCode    String?  @map("postal_code")
+  country       String   @default("Guyana")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile           Profile            @relation(fields: [clerkUserId], references: [clerkUserId])
+  bookings          Booking[]
+  customAssessments CustomAssessment[]
+
+  @@map("addresses")
+  @@index([clerkUserId])
+}
+
+// Booking records for scheduled services
+model Booking {
+  id                       String   @id @default(uuid())
+  clerkUserId             String   @map("clerk_user_id")
+  serviceId               String   @map("service_id")
+  addressId               String   @map("address_id")
+  bookingDate             DateTime @map("booking_date") @db.Date
+  bookingTime             DateTime @map("booking_time") @db.Time
+  status                  String   @default("Scheduled")
+  priceAtBooking          Decimal  @map("price_at_booking") @db.Decimal(10, 2)
+  customerNotes           String?  @map("customer_notes")
+  stripeCheckoutSessionId String?  @unique @map("stripe_checkout_session_id")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile      Profile       @relation(fields: [clerkUserId], references: [clerkUserId])
+  service      Service       @relation(fields: [serviceId], references: [id])
+  address      Address       @relation(fields: [addressId], references: [id])
+  bookingMedia BookingMedia[]
+
+  @@map("bookings")
+  @@index([clerkUserId])
+}
+
+// Media files (before/after photos) for bookings
+model BookingMedia {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  storagePath String   @map("storage_path")
+  fileType    String?  @map("file_type")
+  mediaType   String   @map("media_type")
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@map("booking_media")
+}
+
+// Custom assessment requests for tailored services
+model CustomAssessment {
+  id             String   @id @default(uuid())
+  clerkUserId    String   @map("clerk_user_id")
+  serviceId      String   @map("service_id")
+  addressId      String   @map("address_id")
+  preferredDate  DateTime @map("preferred_date") @db.Date
+  preferredTime  String   @map("preferred_time")
+  assessmentData Json     @map("assessment_data") @db.JsonB
+  status         String   @default("Pending")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  profile Profile @relation(fields: [clerkUserId], references: [clerkUserId])
+  service Service @relation(fields: [serviceId], references: [id])
+  address Address @relation(fields: [addressId], references: [id])
+
+  @@map("custom_assessments")
+  @@index([clerkUserId])
+}

@@ -1,6 +1,10 @@
-# Supabase Integration Guide for Easy Lawn Care
+# [DEPRECATED] Supabase Integration Guide for Easy Lawn Care
 
-This document provides information about the Supabase integration in the Easy Lawn Care application, including setup instructions, database structure, and troubleshooting guidance.
+> **IMPORTANT: This document is deprecated**  
+> The application has been migrated from Supabase to Prisma ORM.  
+> Please refer to [PRISMA.md](./PRISMA.md) for current database documentation.
+
+This document is kept for historical reference only. It provides information about the previous Supabase integration in the Easy Lawn Care application, including setup instructions, database structure, and troubleshooting guidance that are no longer applicable.
 
 ## Database Setup
 

@@ -3,17 +3,15 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import { refreshSupabaseSchema } from '@/lib/refresh-schema';
 
 interface Address {
   id: string;
-  clerk_user_id: string;
-  street_address: string;
+  clerkUserId: string;
+  streetAddress: string;
   area: string;
   city: string;
   region: string;
-  postal_code?: string;
+  postalCode?: string;
   country: string;
 }
 
@@ -59,11 +57,11 @@ export default function AddressesPage() {
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newAddress, setNewAddress] = useState({
-    street_address: '',
+    streetAddress: '',
     area: '',
     city: 'Georgetown',
     region: 'Demerara-Mahaica (Region 4)',
-    postal_code: '',
+    postalCode: '',
     country: 'Guyana',
   });
   const [addingAddress, setAddingAddress] = useState(false);
@@ -78,20 +76,18 @@ export default function AddressesPage() {
       if (!user?.id) return;
 
       try {
-        const { data, error } = await supabase
-          .from('addresses')
-          .select('*')
-          .eq('clerk_user_id', user.id);
-
-        if (error) {
-          console.error('Error fetching addresses:', error);
-          setError('Failed to load addresses.');
-        } else {
-          setAddresses(data || []);
+        const response = await fetch('/api/addresses');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch addresses');
         }
+        
+        const data = await response.json();
+        setAddresses(data.addresses || []);
+        setError(null);
       } catch (err) {
-        console.error('Exception when fetching addresses:', err);
-        setError('An unexpected error occurred while loading addresses.');
+        console.error('Error fetching addresses:', err);
+        setError('Failed to load addresses.');
       } finally {
         setLoading(false);
       }
@@ -114,11 +110,11 @@ export default function AddressesPage() {
   // Handler for editing address
   const handleEditAddress = (address: Address) => {
     setNewAddress({
-      street_address: address.street_address,
+      streetAddress: address.streetAddress,
       area: address.area,
       city: address.city,
       region: address.region,
-      postal_code: address.postal_code || '',
+      postalCode: address.postalCode || '',
       country: address.country,
     });
     setEditingAddressId(address.id);
@@ -133,20 +129,18 @@ export default function AddressesPage() {
     
     setIsDeleting(true);
     try {
-      const { error } = await supabase
-        .from('addresses')
-        .delete()
-        .eq('id', addressId);
-        
-      if (error) {
-        console.error('Error deleting address:', error);
-        alert(`Failed to delete address: ${error.message}`);
-      } else {
-        // Update local state to remove the deleted address
-        setAddresses(prev => prev.filter(address => address.id !== addressId));
+      const response = await fetch(`/api/addresses?id=${addressId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete address');
       }
+
+      // Update local state to remove the deleted address
+      setAddresses(prev => prev.filter(address => address.id !== addressId));
     } catch (err) {
-      console.error('Unexpected error during address deletion:', err);
+      console.error('Error deleting address:', err);
       alert('An error occurred while deleting the address');
     } finally {
       setIsDeleting(false);
@@ -163,126 +157,76 @@ export default function AddressesPage() {
     setAddingAddress(true);
     setAddError(null);
 
-    // Log that Supabase client is being used (without accessing protected properties)
-    console.log('Using Supabase client for database operations');
-
     // Construct the address data object with all required fields
     const addressData = {
-      clerk_user_id: user.id,
-      street_address: newAddress.street_address.trim(),
+      streetAddress: newAddress.streetAddress.trim(),
       area: newAddress.area.trim(),
       city: newAddress.city.trim(),
       region: newAddress.region.trim(),
-      postal_code: newAddress.postal_code?.trim() || null,
+      postalCode: newAddress.postalCode?.trim() || undefined,
       country: newAddress.country.trim() || 'Guyana',
     };
 
-    // Log the data we're trying to insert or update
-    console.log(`${editingAddressId ? 'Updating' : 'Submitting'} address with data:`, addressData);
-
     try {
-      // Try to refresh the Supabase schema cache to fix PGRST204 errors
-      console.log('Refreshing Supabase schema cache...');
-      const refreshResult = await refreshSupabaseSchema();
-      console.log('Schema refresh result:', refreshResult);
-      
-      // Direct debugging of the Supabase connection
-      const testQuery = await supabase.from('addresses').select('*').limit(1);
-      console.log('Test query result:', testQuery);
-
-      if (testQuery.error && testQuery.error.code === 'PGRST204') {
-        console.log('Schema cache issue detected. The "addresses" table exists but PostgREST schema cache needs updating.');
-        // Continue anyway, since we already attempted a refresh
-      } else if (testQuery.error) {
-        console.error('Supabase connection test failed:', testQuery.error);
-        setAddError(`Database connection error: ${testQuery.error.message || 'Unknown error'}`);
-        setAddingAddress(false);
-        return;
-      }
-
-      // Determine if we're inserting or updating
-      let result;
+      let response;
       if (editingAddressId) {
         // Update existing address
-        console.log('Updating address record...');
-        result = await supabase
-          .from('addresses')
-          .update(addressData)
-          .eq('id', editingAddressId)
-          .select();
+        response = await fetch('/api/addresses', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            addressId: editingAddressId,
+            ...addressData
+          }),
+        });
       } else {
         // Insert new address
-        console.log('Inserting address record...');
-        result = await supabase
-          .from('addresses')
-          .insert([addressData])
-          .select();
-      }
-
-      console.log(`${editingAddressId ? 'Update' : 'Insert'} operation complete. Result:`, result);
-
-      if (result.error) {
-        // Detailed error logging with fallbacks for empty objects
-        const errorCode = result.error.code || 'unknown';
-        const errorMessage = result.error.message || 'Unknown database error';
-        const errorDetails = JSON.stringify(result.error.details) || 'No details available';
-        
-        console.error('Error adding address. Code:', errorCode);
-        console.error('Error message:', errorMessage);
-        console.error('Error details:', errorDetails);
-        
-        // User-friendly error message based on error code
-        if (errorCode === '42P01') {
-          setAddError(`The addresses table does not exist. Please follow the setup instructions in the documentation.`);
-        } else if (errorCode === '23502') {
-          setAddError(`Missing required field: ${errorDetails}`);
-        } else if (errorCode === '23505') {
-          setAddError(`This address already exists.`);
-        } else if (errorCode.includes('auth')) {
-          setAddError(`Authentication error: ${errorMessage}. You may need to sign in again.`);
-        } else {
-          setAddError(`Database error (${errorCode}): ${errorMessage}`);
-        }
-      } else if (result.data && result.data.length > 0) {
-        // Success path
-        if (editingAddressId) {
-          console.log('Address updated successfully:', result.data[0]);
-          setAddresses(prev => prev.map(addr => 
-            addr.id === editingAddressId ? result.data[0] : addr
-          ));
-          setEditingAddressId(null);
-        } else {
-          console.log('Address added successfully:', result.data[0]);
-          setAddresses(prev => [...prev, result.data[0]]);
-        }
-        setNewAddress({
-          street_address: '',
-          area: '',
-          city: 'Georgetown',
-          region: 'Demerara-Mahaica (Region 4)',
-          postal_code: '',
-          country: 'Guyana',
+        response = await fetch('/api/addresses', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(addressData),
         });
-        setShowAddForm(false);
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save address');
+      }
+
+      const result = await response.json();
+
+      if (editingAddressId) {
+        // Update was successful, refresh the addresses
+        const refreshResponse = await fetch('/api/addresses');
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          setAddresses(refreshData.addresses || []);
+        }
+        setEditingAddressId(null);
       } else {
-        console.warn('No error, but no data returned after insert');
-        setAddError('Address may have been added but no confirmation was received. Please refresh the page to check.');
+        // Add was successful, add to local state
+        if (result.address) {
+          setAddresses(prev => [...prev, result.address]);
+        }
       }
-    } catch (err) {
-      // Catch and log any unexpected errors
-      console.error('Unexpected exception during address submission:', err);
-      let errorMessage = 'An unexpected error occurred';
-      
-      if (err instanceof Error) {
-        console.error('Error name:', err.name);
-        console.error('Error message:', err.message);
-        console.error('Error stack:', err.stack);
-        errorMessage = `${err.name}: ${err.message}`;
-      } else if (err && typeof err === 'object') {
-        errorMessage = JSON.stringify(err);
-      }
-      
-      setAddError(`System error: ${errorMessage}`);
+
+      // Reset form
+      setNewAddress({
+        streetAddress: '',
+        area: '',
+        city: 'Georgetown',
+        region: 'Demerara-Mahaica (Region 4)',
+        postalCode: '',
+        country: 'Guyana',
+      });
+      setShowAddForm(false);
+    } catch (err: any) {
+      console.error('Error saving address:', err);
+      setAddError(err.message || 'An unexpected error occurred');
     } finally {
       setAddingAddress(false);
     }
@@ -296,62 +240,6 @@ export default function AddressesPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-24">
         <p>Loading addresses...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-8 md:p-24">
-        <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-md border border-red-200">
-          <h1 className="text-3xl font-bold text-red-600 mb-6">Database Error</h1>
-          <p className="text-red-600 mb-4">{error}</p>
-          
-          <div className="mt-6 p-4 bg-gray-50 rounded-md">
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">Need to set up your database?</h2>
-            <p className="mb-4">It looks like you might need to create the necessary tables in your Supabase database.</p>
-            
-            <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Quick Setup Instructions:</h3>
-              <ol className="list-decimal pl-6 mb-4 space-y-2">
-                <li>Log in to your <a href="https://app.supabase.io" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Supabase Dashboard</a></li>
-                <li>Select your project</li>
-                <li>Go to the "SQL Editor" section</li>
-                <li>Create a new query</li>
-                <li>Copy and paste the SQL code below</li>
-                <li>Run the query</li>
-                <li>Refresh this page</li>
-              </ol>
-            </div>
-            
-            <div className="bg-gray-800 text-white p-4 rounded-md overflow-x-auto mb-4">
-              <pre className="text-sm">
-                <code>
-{`-- Create addresses table
-CREATE TABLE IF NOT EXISTS public.addresses (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    clerk_user_id TEXT NOT NULL,
-    street_address TEXT NOT NULL,
-    area TEXT NOT NULL,
-    city TEXT NOT NULL,
-    region TEXT NOT NULL,
-    postal_code TEXT,
-    country TEXT NOT NULL DEFAULT 'Guyana',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);`}
-                </code>
-              </pre>
-            </div>
-            
-            <p className="text-sm text-gray-600">
-              For complete setup instructions and documentation, see the 
-              <a href="/docs/SUPABASE.md" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
-                Supabase Integration Guide
-              </a> in the project documentation.
-            </p>
-          </div>
-        </div>
       </div>
     );
   }
@@ -378,15 +266,15 @@ CREATE TABLE IF NOT EXISTS public.addresses (
             {addError && <p className="text-red-600 mb-4">{addError}</p>}
             
             <div className="mb-4">
-              <label htmlFor="street_address" className="block text-gray-700 text-sm font-bold mb-2">
+              <label htmlFor="streetAddress" className="block text-gray-700 text-sm font-bold mb-2">
                 Lot/House Number and Street:
               </label>
               <input 
                 type="text" 
-                id="street_address" 
-                name="street_address" 
+                id="streetAddress" 
+                name="streetAddress" 
                 placeholder="Lot 42 Charlotte Street" 
-                value={newAddress.street_address} 
+                value={newAddress.streetAddress} 
                 onChange={handleInputChange} 
                 required 
                 className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
@@ -446,14 +334,14 @@ CREATE TABLE IF NOT EXISTS public.addresses (
             </div>
             
             <div className="mb-4">
-              <label htmlFor="postal_code" className="block text-gray-700 text-sm font-bold mb-2">
+              <label htmlFor="postalCode" className="block text-gray-700 text-sm font-bold mb-2">
                 Postal Code (if applicable):
               </label>
               <input 
                 type="text" 
-                id="postal_code" 
-                name="postal_code" 
-                value={newAddress.postal_code} 
+                id="postalCode" 
+                name="postalCode" 
+                value={newAddress.postalCode} 
                 onChange={handleInputChange} 
                 className="shadow border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
               />
@@ -487,6 +375,12 @@ CREATE TABLE IF NOT EXISTS public.addresses (
           </form>
         )}
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
         {addresses.length === 0 ? (
           <p className="text-gray-600">You have no saved addresses.</p>
         ) : (
@@ -494,11 +388,11 @@ CREATE TABLE IF NOT EXISTS public.addresses (
             {addresses.map((address) => (
               <div key={address.id} className="border p-6 rounded-lg shadow-md">
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">Address:</h3>
-                <p className="text-gray-700">{address.street_address || 'No street address'}</p>
+                <p className="text-gray-700">{address.streetAddress || 'No street address'}</p>
                 <p className="text-gray-700">{address.area || 'No area specified'}</p>
                 <p className="text-gray-700">{address.city || 'No city specified'}</p>
                 <p className="text-gray-700">{address.region || 'No region specified'}</p>
-                {address.postal_code && <p className="text-gray-700">{address.postal_code}</p>}
+                {address.postalCode && <p className="text-gray-700">{address.postalCode}</p>}
                 <p className="text-gray-700">{address.country || 'Guyana'}</p>
                 <div className="mt-4 flex space-x-2">
                   <button 
