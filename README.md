@@ -225,3 +225,5 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
 Built with ❤️ for efficient lawn care service management.
 
 <!-- Minor update to trigger Vercel redeployment -->
+
+<!-- Another minor update to trigger Vercel redeployment -->
