@@ -73,6 +73,15 @@ export default function BookingPage() {
       date: "",
       timeSlot: "",
       notes: "",
+      assessment: {
+        lawnSize: "small",
+        lawnCondition: "good",
+        hasObstacles: false,
+        obstacleDetails: "",
+        hasSpecialRequests: false,
+        specialRequestDetails: "",
+        hasExistingIrrigationSystem: false,
+      },
     },
   });
 

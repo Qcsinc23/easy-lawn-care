@@ -7,11 +7,11 @@ export const assessmentSchema = z.object({
   lawnCondition: z.enum(["good", "fair", "poor"], {
     required_error: "Please select your lawn condition",
   }),
-  hasObstacles: z.boolean().default(false),
+  hasObstacles: z.boolean().transform(val => val ?? false),
   obstacleDetails: z.string().optional(),
-  hasSpecialRequests: z.boolean().default(false),
+  hasSpecialRequests: z.boolean().transform(val => val ?? false),
   specialRequestDetails: z.string().optional(),
-  hasExistingIrrigationSystem: z.boolean().default(false),
+  hasExistingIrrigationSystem: z.boolean().transform(val => val ?? false),
 });
 
 export const bookingFormSchema = z.object({
