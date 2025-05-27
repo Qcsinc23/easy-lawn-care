@@ -109,12 +109,11 @@ function DashboardContent() {
     };
     fetchBookings();
     
-    // Set up automatic refresh every 5 seconds
-    const intervalId = setInterval(() => {
-      setRefreshTrigger(prev => prev + 1);
-    }, 5000);
+    // Automatic refresh has been removed. Manual refresh is still available.
+    // If you want to re-enable automatic refresh, you can add:
+    // const intervalId = setInterval(() => setRefreshTrigger(prev => prev + 1), 5000);
+    // return () => clearInterval(intervalId);
     
-    return () => clearInterval(intervalId);
   }, [user, refreshTrigger]);
   
   // Handle booking cancellation
