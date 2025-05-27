@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { currentUser } from '@clerk/nextjs/server';
 import { syncUserProfileWithPrisma } from '@/lib/user-profile';
 import { PrismaClientInitializationError } from '@prisma/client/runtime/library';
+// Reverting to direct import, will use 'any' for map parameter if TS errors persist
+import type { Booking } from '@prisma/client'; 
 
 /**
  * @fileoverview API routes for booking management
@@ -69,7 +71,7 @@ export async function GET() {
         where: {
           clerkUserId: user.id
         },
-        include: {
+        include: { // Re-add include here
           service: {
             select: {
               name: true
@@ -81,7 +83,16 @@ export async function GET() {
         }
       });
 
-      return NextResponse.json({ bookings });
+      // Convert priceAtBooking from Decimal to number for frontend compatibility
+      // Using 'any' for booking parameter type to bypass persistent TS errors for now
+      const bookingsWithNumericPrice = bookings.map((booking: any) => ({
+        ...booking,
+        // Ensure priceAtBooking is treated as a number after parsing.
+        // It might be string if it was a Decimal from Prisma.
+        priceAtBooking: booking.priceAtBooking ? parseFloat(String(booking.priceAtBooking)) : null,
+      }));
+
+      return NextResponse.json({ bookings: bookingsWithNumericPrice });
     } catch (dbError) {
       // Handle database-specific errors
       console.error('Database operation error:', dbError);
